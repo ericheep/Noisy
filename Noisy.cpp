@@ -20,10 +20,12 @@ CK_DLL_CTOR(noisy_ctor);
 // declaration of chugin desctructor
 CK_DLL_DTOR(noisy_dtor);
 
+// noisy member functions
 CK_DLL_MFUN(noisy_generate);
 
 // set type of noise
 CK_DLL_MFUN(noisy_setGaussian);
+CK_DLL_MFUN(noisy_setRed);
 
 // for Chugins extending UGen, this is mono synthesis function for 1 sample
 CK_DLL_TICK(noisy_tick);
@@ -84,10 +86,51 @@ private:
     double u1, u2;
 };
 
+class RedFunc : public NoiseFunc
+{
+public:
+    RedFunc(float _r) {
+        epsilon = std::numeric_limits<double>::min();
+        two_pi = 2.0 * M_PI;
+
+        z0 = 0.0;
+        z1 = 0.0;
+
+        u1 = 0.0;
+        u2 = 0.0;
+    }
+
+    float generate() {
+        can_generate = !can_generate;
+
+        if (!can_generate)
+           return z1 * 1.0 + 0.0;
+        do
+         {
+           u1 = rand() * (1.0 / RAND_MAX);
+           u2 = rand() * (1.0 / RAND_MAX);
+         }
+        while ( u1 <= epsilon );
+
+        z0 = sqrt(-2.0 * log(u1)) * cos(two_pi * u2);
+        z1 = sqrt(-2.0 * log(u1)) * sin(two_pi * u2);
+
+        return z0 * 1.0 + 0.0;
+    }
+
+private:
+    float mu, sigma;
+
+    float two_pi;
+    double epsilon;
+
+    double z0, z1;
+    bool can_generate;
+
+    double u1, u2;
+};
 
 // class definition for internal Chugin data
-// (note: this isn't strictly necessary, but serves as example
-// of one recommended approach)
 class Noisy
 {
 public:
@@ -106,12 +149,15 @@ public:
         return in;
     }
 
-    // set parameter example
     float setGaussian( t_CKFLOAT mu, t_CKFLOAT sigma )
     {
         m_func = new GaussianFunc(mu, sigma);
     }
 
+    float setRed( t_CKFLOAT r )
+    {
+        m_func = new RedFunc(r);
+    }
 
 private:
     // instance data
@@ -119,39 +165,36 @@ private:
 
 
 // query function: chuck calls this when loading the Chugin
-// NOTE: developer will need to modify this function to
-// add additional functions to this Chugin
 CK_DLL_QUERY( Noisy )
 {
-    // hmm, don't change this...
     QUERY->setname(QUERY, "Noisy");
 
     // begin the class definition
     // can change the second argument to extend a different ChucK class
     QUERY->begin_class(QUERY, "Noisy", "UGen");
 
-    // register the constructor (probably no need to change)
+    // register the constructor
     QUERY->add_ctor(QUERY, noisy_ctor);
-    // register the destructor (probably no need to change)
+    // register the destructor
     QUERY->add_dtor(QUERY, noisy_dtor);
 
     // for UGen's only: add tick function
     QUERY->add_ugen_func(QUERY, noisy_tick, NULL, 1, 1);
 
-    // example of adding setter method
     QUERY->add_mfun(QUERY, noisy_setGaussian, "float", "mu");
     QUERY->add_arg(QUERY, "float", "sigma");
     QUERY->doc_func(QUERY, "Set Guassian White Noise with mu and sigma value.");
+
+    QUERY->add_mfun(QUERY, noisy_setRed, "float", "r");
+    QUERY->doc_func(QUERY, "Set Red Noise with r value.");
 
     // this reserves a variable in the ChucK internal class to store
     // referene to the c++ class we defined above
     noisy_data_offset = QUERY->add_mvar(QUERY, "int", "@n_data", false);
 
     // end the class definition
-    // IMPORTANT: this MUST be called!
     QUERY->end_class(QUERY);
 
-    // wasn't that a breeze?
     return TRUE;
 }
 
@@ -195,18 +238,20 @@ CK_DLL_TICK(noisy_tick)
     // invoke our tick function; store in the magical out variable
     if(n_obj) *out = n_obj->tick(in);
 
-    // yes
     return TRUE;
 }
 
 
-// example implementation for setter
 CK_DLL_MFUN(noisy_setGaussian)
 {
-    // get our c++ class pointer
     Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
     t_CKFLOAT a0 = GET_NEXT_FLOAT(ARGS);
     t_CKFLOAT a1 = GET_NEXT_FLOAT(ARGS);
-    // set the return value
     RETURN->v_float = n_obj->setGaussian(a0, a1);
+}
+
+CK_DLL_MFUN(noisy_setRed)
+{
+    Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
+    RETURN->v_float = n_obj->setGaussian(GET_NEXT_FLOAT(ARGS));
 }
