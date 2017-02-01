@@ -10,22 +10,79 @@
 // general includes
 #include <stdio.h>
 #include <limits.h>
-#include <cmath>
+#ifdef WIN32
+#define _USE_MATH_DEFINES
+#endif
+#include <math.h>
 
 // declaration of chugin constructor
 CK_DLL_CTOR(noisy_ctor);
 // declaration of chugin desctructor
 CK_DLL_DTOR(noisy_dtor);
 
-// example of getter/setter
-CK_DLL_MFUN(noisy_setParam);
-CK_DLL_MFUN(noisy_getParam);
+CK_DLL_MFUN(noisy_generate);
+
+// set type of noise
+CK_DLL_MFUN(noisy_setGaussian);
 
 // for Chugins extending UGen, this is mono synthesis function for 1 sample
 CK_DLL_TICK(noisy_tick);
 
 // this is a special offset reserved for Chugin internal data
 t_CKINT noisy_data_offset = 0;
+
+
+class NoiseFunc
+{
+public:
+    virtual float generate() = 0;
+};
+
+class GaussianFunc : public NoiseFunc
+{
+public:
+    GaussianFunc(float _mu, float _sigma) {
+        mu = _mu;
+        sigma = _sigma;
+        epsilon = std::numeric_limits<double>::min();
+        two_pi = 2.0 * M_PI;
+
+        z0 = 0.0;
+        z1 = 0.0;
+
+        u1 = 0.0;
+        u2 = 0.0;
+    }
+
+    float generate() {
+        can_generate = !can_generate;
+
+        if (!can_generate)
+           return z1 * sigma + mu;
+        do
+         {
+           u1 = rand() * (1.0 / RAND_MAX);
+           u2 = rand() * (1.0 / RAND_MAX);
+         }
+        while ( u1 <= epsilon );
+
+        z0 = sqrt(-2.0 * log(u1)) * cos(two_pi * u2);
+        z1 = sqrt(-2.0 * log(u1)) * sin(two_pi * u2);
+
+        return z0 * sigma + mu;
+    }
+
+private:
+    float mu, sigma;
+
+    float two_pi;
+    double epsilon;
+
+    double z0, z1;
+    bool can_generate;
+
+    double u1, u2;
+};
 
 
 // class definition for internal Chugin data
@@ -37,50 +94,27 @@ public:
     // constructor
     Noisy( t_CKFLOAT fs)
     {
-        m_param = 0;
+        m_func = new GaussianFunc(0.0, 1.0);
     }
+
+    NoiseFunc* m_func;
 
     // for Chugins extending UGen
     SAMPLE tick( SAMPLE in )
     {
-        double sigma = 1.0;
-        double mu = 0.0;
-        const double epsilon = std::numeric_limits<double>::min();
-        const double two_pi = 2.0*3.14159265358979323846;
-
-        static double z0, z1;
-        static bool generate;
-        generate = !generate;
-
-        if (!generate)
-           return z1 * sigma + mu;
-
-        double u1, u2;
-        do
-         {
-           u1 = rand() * (1.0 / RAND_MAX);
-           u2 = rand() * (1.0 / RAND_MAX);
-         }
-        while ( u1 <= epsilon );
-
-        z0 = sqrt(-2.0 * log(u1)) * cos(two_pi * u2);
-        z1 = sqrt(-2.0 * log(u1)) * sin(two_pi * u2);
-        return z0 * sigma + mu;
+        in = m_func->generate();
+        return in;
     }
 
     // set parameter example
-    float setParam( t_CKFLOAT p )
+    float setGaussian( t_CKFLOAT mu, t_CKFLOAT sigma )
     {
-        m_param = p;
-        return p;
+        m_func = new GaussianFunc(mu, sigma);
     }
 
-    // get parameter example
-    float getParam() { return m_param; }
 
 private:
     // instance data
-    float m_param;
 };
 
 
@@ -104,17 +138,10 @@ CK_DLL_QUERY( Noisy )
     // for UGen's only: add tick function
     QUERY->add_ugen_func(QUERY, noisy_tick, NULL, 1, 1);
 
-    // NOTE: if this is to be a UGen with more than 1 channel,
-    // e.g., a multichannel UGen -- will need to use add_ugen_funcf()
-    // and declare a tickf function using CK_DLL_TICKF
-
     // example of adding setter method
-    QUERY->add_mfun(QUERY, noisy_setParam, "float", "param");
-    // example of adding argument to the above method
-    QUERY->add_arg(QUERY, "float", "arg");
-
-    // example of adding getter method
-    QUERY->add_mfun(QUERY, noisy_getParam, "float", "param");
+    QUERY->add_mfun(QUERY, noisy_setGaussian, "float", "mu");
+    QUERY->add_arg(QUERY, "float", "sigma");
+    QUERY->doc_func(QUERY, "Set Guassian White Noise with mu and sigma value.");
 
     // this reserves a variable in the ChucK internal class to store
     // referene to the c++ class we defined above
@@ -174,20 +201,12 @@ CK_DLL_TICK(noisy_tick)
 
 
 // example implementation for setter
-CK_DLL_MFUN(noisy_setParam)
+CK_DLL_MFUN(noisy_setGaussian)
 {
     // get our c++ class pointer
     Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
+    t_CKFLOAT a0 = GET_NEXT_FLOAT(ARGS);
+    t_CKFLOAT a1 = GET_NEXT_FLOAT(ARGS);
     // set the return value
-    RETURN->v_float = n_obj->setParam(GET_NEXT_FLOAT(ARGS));
-}
-
-
-// example implementation for getter
-CK_DLL_MFUN(noisy_getParam)
-{
-    // get our c++ class pointer
-    Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
-    // set the return value
-    RETURN->v_float = n_obj->getParam();
+    RETURN->v_float = n_obj->setGaussian(a0, a1);
 }
