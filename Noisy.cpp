@@ -90,44 +90,15 @@ class RedFunc : public NoiseFunc
 {
 public:
     RedFunc(float _r) {
-        epsilon = std::numeric_limits<double>::min();
-        two_pi = 2.0 * M_PI;
-
-        z0 = 0.0;
-        z1 = 0.0;
-
-        u1 = 0.0;
-        u2 = 0.0;
+        r = _r;
     }
 
     float generate() {
-        can_generate = !can_generate;
-
-        if (!can_generate)
-           return z1 * 1.0 + 0.0;
-        do
-         {
-           u1 = rand() * (1.0 / RAND_MAX);
-           u2 = rand() * (1.0 / RAND_MAX);
-         }
-        while ( u1 <= epsilon );
-
-        z0 = sqrt(-2.0 * log(u1)) * cos(two_pi * u2);
-        z1 = sqrt(-2.0 * log(u1)) * sin(two_pi * u2);
-
-        return z0 * 1.0 + 0.0;
+        return 0;
     }
 
 private:
-    float mu, sigma;
-
-    float two_pi;
-    double epsilon;
-
-    double z0, z1;
-    bool can_generate;
-
-    double u1, u2;
+    float r;
 };
 
 // class definition for internal Chugin data
