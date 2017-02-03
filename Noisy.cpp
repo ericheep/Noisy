@@ -24,7 +24,10 @@ CK_DLL_DTOR(noisy_dtor);
 CK_DLL_MFUN(noisy_generate);
 
 // set type of noise
+CK_DLL_MFUN(noisy_setBlack);
+CK_DLL_MFUN(noisy_setBrown);
 CK_DLL_MFUN(noisy_setGaussian);
+CK_DLL_MFUN(noisy_setGray);
 CK_DLL_MFUN(noisy_setRed);
 
 // for Chugins extending UGen, this is mono synthesis function for 1 sample
@@ -39,6 +42,23 @@ class NoiseFunc
 public:
     virtual float generate() = 0;
 };
+
+
+class BlackFunc: public NoiseFunc
+{
+public:
+    BlackFunc() {
+        m = 0;
+    }
+
+    float generate() {
+        return 0;
+    }
+
+private:
+    float m;
+};
+
 
 class GaussianFunc : public NoiseFunc
 {
@@ -86,6 +106,19 @@ private:
     double u1, u2;
 };
 
+class GrayFunc : public NoiseFunc
+{
+public:
+    GrayFunc() {
+    }
+
+    float generate() {
+        return 0;
+    }
+
+private:
+};
+
 class RedFunc : public NoiseFunc
 {
 public:
@@ -99,6 +132,45 @@ public:
 
 private:
     float r;
+};
+
+/*
+while (true)
+{
+  float  r = white();
+  m_brown += r;
+  if (m_brown<-8.0f || m_brown>8.0f) m_brown -= r;
+  else break;
+}
+return m_brown*0.0625f;
+*/
+
+class BrownFunc : public NoiseFunc
+{
+public:
+    BrownFunc() {
+        m = 0;
+    }
+
+    float generate() {
+        return 0;
+    }
+
+private:
+    float m;
+};
+
+class WhiteFunc : public NoiseFunc
+{
+public:
+    WhiteFunc() {
+    }
+
+    float generate() {
+       return rand() * ((1.0 / RAND_MAX) * 2.0) - 1.0;
+    }
+private:
+    // nothing
 };
 
 // class definition for internal Chugin data
@@ -120,15 +192,31 @@ public:
         return in;
     }
 
-    float setGaussian( t_CKFLOAT mu, t_CKFLOAT sigma )
+    void setBlack()
+    {
+        m_func = new BlackFunc();
+    }
+
+    void setBrown()
+    {
+        m_func = new BrownFunc();
+    }
+
+    void setGaussian( t_CKFLOAT mu, t_CKFLOAT sigma )
     {
         m_func = new GaussianFunc(mu, sigma);
     }
 
-    float setRed( t_CKFLOAT r )
+    void setGray()
+    {
+        m_func = new GrayFunc();
+    }
+
+    void setRed( t_CKFLOAT r )
     {
         m_func = new RedFunc(r);
     }
+
 
 private:
     // instance data
@@ -152,11 +240,21 @@ CK_DLL_QUERY( Noisy )
     // for UGen's only: add tick function
     QUERY->add_ugen_func(QUERY, noisy_tick, NULL, 1, 1);
 
-    QUERY->add_mfun(QUERY, noisy_setGaussian, "float", "mu");
+    QUERY->add_mfun(QUERY, noisy_setBlack, "void", "setBlack");
+    QUERY->doc_func(QUERY, "Set Black Noise.");
+
+    QUERY->add_mfun(QUERY, noisy_setBrown, "void", "setBrown");
+    QUERY->doc_func(QUERY, "Set Brown Noise.");
+
+    QUERY->add_mfun(QUERY, noisy_setGaussian, "void", "setGaussian");
+    QUERY->add_arg(QUERY, "float", "mu");
     QUERY->add_arg(QUERY, "float", "sigma");
     QUERY->doc_func(QUERY, "Set Guassian White Noise with mu and sigma value.");
 
-    QUERY->add_mfun(QUERY, noisy_setRed, "float", "r");
+    QUERY->add_mfun(QUERY, noisy_setGray, "void", "setGray");
+    QUERY->doc_func(QUERY, "Set Gray Noise.");
+
+    QUERY->add_mfun(QUERY, noisy_setRed, "void", "setRed");
     QUERY->doc_func(QUERY, "Set Red Noise with r value.");
 
     // this reserves a variable in the ChucK internal class to store
@@ -212,17 +310,34 @@ CK_DLL_TICK(noisy_tick)
     return TRUE;
 }
 
+CK_DLL_MFUN(noisy_setBlack)
+{
+    Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
+    n_obj->setBlack();
+}
 
 CK_DLL_MFUN(noisy_setGaussian)
 {
     Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
     t_CKFLOAT a0 = GET_NEXT_FLOAT(ARGS);
     t_CKFLOAT a1 = GET_NEXT_FLOAT(ARGS);
-    RETURN->v_float = n_obj->setGaussian(a0, a1);
+    n_obj->setGaussian(a0, a1);
+}
+
+CK_DLL_MFUN(noisy_setGray)
+{
+    Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
+    n_obj->setGray();
 }
 
 CK_DLL_MFUN(noisy_setRed)
 {
     Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
-    RETURN->v_float = n_obj->setGaussian(GET_NEXT_FLOAT(ARGS));
+    n_obj->setRed(GET_NEXT_FLOAT(ARGS));
+}
+
+CK_DLL_MFUN(noisy_setBrown)
+{
+    Noisy * n_obj = (Noisy *) OBJ_MEMBER_INT(SELF, noisy_data_offset);
+    n_obj->setBrown();
 }
