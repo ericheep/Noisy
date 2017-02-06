@@ -149,15 +149,25 @@ class BrownFunc : public NoiseFunc
 {
 public:
     BrownFunc() {
-        m = 0;
+        brown = 0.0;
     }
 
     float generate() {
-        return 0;
+        while (true) {
+            white = rand() * ((1.0 / RAND_MAX) * 2.0) - 1.0;
+            brown += white;
+            if (brown < -8.0 || brown > 8.0) {
+                brown -= white;
+            }
+            else {
+                break;
+            }
+        }
+        return brown * 0.0625;
     }
 
 private:
-    float m;
+    float m_brown, white;
 };
 
 class WhiteFunc : public NoiseFunc
